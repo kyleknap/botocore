@@ -20,13 +20,10 @@ import threading
 from botocore.vendored.requests.adapters import HTTPAdapter
 from botocore.vendored.requests.sessions import Session
 from botocore.vendored.requests.utils import get_environ_proxies
-from botocore.vendored.requests.exceptions import ConnectionError
 from botocore.vendored import six
 
 from botocore.awsrequest import create_request_object
 from botocore.exceptions import UnknownEndpointError
-from botocore.exceptions import EndpointConnectionError
-from botocore.exceptions import ConnectionClosedError
 from botocore.compat import filter_ssl_warnings
 from botocore.utils import is_valid_endpoint_url
 from botocore.hooks import first_non_none_response
@@ -220,24 +217,6 @@ class Endpoint(object):
                 request, verify=self.verify,
                 stream=streaming,
                 proxies=self.proxies, timeout=self.timeout)
-        except ConnectionError as e:
-            # For a connection error, if it looks like it's a DNS
-            # lookup issue, 99% of the time this is due to a misconfigured
-            # region/endpoint so we'll raise a more specific error message
-            # to help users.
-            logger.debug("ConnectionError received when sending HTTP request.",
-                         exc_info=True)
-            if self._looks_like_dns_error(e):
-                endpoint_url = e.request.url
-                better_exception = EndpointConnectionError(
-                    endpoint_url=endpoint_url, error=e)
-                return (None, better_exception)
-            elif self._looks_like_bad_status_line(e):
-                better_exception = ConnectionClosedError(
-                    endpoint_url=e.request.url, request=e.request)
-                return (None, better_exception)
-            else:
-                return (None, e)
         except Exception as e:
             logger.debug("Exception received when sending HTTP request.",
                          exc_info=True)
@@ -256,12 +235,6 @@ class Endpoint(object):
             response_dict, operation_model.output_shape)
         history_recorder.record('PARSED_RESPONSE', parsed_response)
         return (http_response, parsed_response), None
-
-    def _looks_like_dns_error(self, e):
-        return 'gaierror' in str(e) and e.request is not None
-
-    def _looks_like_bad_status_line(self, e):
-        return 'BadStatusLine' in str(e) and e.request is not None
 
     def _needs_retry(self, attempts, operation_model, request_dict,
                      response=None, caught_exception=None):

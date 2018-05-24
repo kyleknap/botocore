@@ -24,6 +24,8 @@ import re
 import warnings
 import uuid
 
+from botocore.vendored.requests.exceptions import ConnectionError
+
 from botocore.compat import unquote, json, six, unquote_str, \
     ensure_bytes, get_md5, MD5_AVAILABLE, OrderedDict
 from botocore.docs.utils import AutoPopulatedParam
@@ -35,6 +37,8 @@ from botocore.signers import add_generate_db_auth_token
 from botocore.exceptions import ParamValidationError
 from botocore.exceptions import AliasConflictParameterError
 from botocore.exceptions import UnsupportedTLSVersionWarning
+from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import ConnectionClosedError
 from botocore.utils import percent_encode, SAFE_CHARS
 from botocore.utils import switch_host_with_param
 
@@ -751,6 +755,28 @@ def convert_body_to_file_like_object(params, **kwargs):
             params['Body'] = six.BytesIO(params['Body'])
 
 
+def raise_improved_connection_error_message(exception, **kwargs):
+    if isinstance(exception, ConnectionError):
+        if _looks_like_dns_error(exception):
+            # For a connection error, if it looks like it's a DNS
+            # lookup issue, 99% of the time this is due to a misconfigured
+            # region/endpoint so we'll raise a more specific error message
+            # to help users.
+            raise EndpointConnectionError(
+                endpoint_url=exception.request.url, error=exception)
+        elif _looks_like_bad_status_line(exception):
+            raise ConnectionClosedError(
+                endpoint_url=exception.request.url, request=exception.request)
+
+
+def _looks_like_dns_error(e):
+    return 'gaierror' in str(e) and e.request is not None
+
+
+def _looks_like_bad_status_line(e):
+    return 'BadStatusLine' in str(e) and e.request is not None
+
+
 def _add_parameter_aliases(handler_list):
     # Mapping of original parameter to parameter alias.
     # The key is <service>.<operation>.parameter
@@ -943,6 +969,7 @@ BUILTIN_HANDLERS = [
     ('before-parameter-build.route53', fix_route53_ids),
     ('before-parameter-build.glacier', inject_account_id),
     ('after-call.s3.ListObjects', decode_list_object),
+    ('after-call-error', raise_improved_connection_error_message),
 
     # Cloudsearchdomain search operation will be sent by HTTP POST
     ('request-created.cloudsearchdomain.Search',

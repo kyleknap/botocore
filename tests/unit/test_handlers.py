@@ -19,11 +19,15 @@ import copy
 import os
 import json
 
+from botocore.vendored.requests import ConnectionError
+
 import botocore
 import botocore.session
 from botocore.compat import OrderedDict
 from botocore.exceptions import ParamValidationError, MD5UnavailableError
 from botocore.exceptions import AliasConflictParameterError
+from botocore.exceptions import EndpointConnectionError
+from botocore.exceptions import ConnectionClosedError
 from botocore.awsrequest import AWSRequest
 from botocore.compat import quote, six
 from botocore.config import Config
@@ -907,6 +911,28 @@ class TestHandlers(BaseSessionTest):
             context=context, signing_name=signing_name)
         self.assertEqual(response, 's3v4')
         self.assertEqual(context.get('payload_signing_enabled'), False)
+
+    def test_improve_dns_error_message(self):
+        fake_request = mock.Mock(url='https://ec2.us-west-2.amazonaws.com')
+        connection_error = ConnectionError(
+            "Fake gaierror(8, node or host not known)",
+            request=fake_request)
+        with self.assertRaisesRegexp(EndpointConnectionError,
+                                     'Could not connect'):
+            handlers.raise_improved_connection_error_message(
+                exception=connection_error
+            )
+
+    def test_improve_bad_status_line_message(self):
+        fake_request = mock.Mock(url='https://ec2.us-west-2.amazonaws.com')
+        connection_error = ConnectionError(
+                """'Connection aborted.', BadStatusLine("''",)""",
+                request=fake_request)
+        with self.assertRaisesRegexp(ConnectionClosedError,
+                                     'Connection was closed'):
+            handlers.raise_improved_connection_error_message(
+                exception=connection_error
+            )
 
 
 class TestConvertStringBodyToFileLikeObject(BaseSessionTest):
