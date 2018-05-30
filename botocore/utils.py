@@ -20,6 +20,7 @@ import functools
 import weakref
 import random
 import os
+import platform
 
 import dateutil.parser
 from dateutil.tz import tzlocal, tzutc
@@ -80,6 +81,42 @@ def get_service_module_name(service_model):
     name = name.replace('AWS', '')
     name = re.sub(r'\W+', '', name)
     return name
+
+
+def get_user_agent(user_agent_name='Botocore',
+                   user_agent_version=botocore_version,
+                   user_agent_extra=None,
+                   env=None):
+    """Returns a string suitable for use as a User-Agent header.
+
+    :type user_agent_name: str
+    :param user_agent_name: The name of the library to generate the user
+        agent for
+
+    :type user_agent_version: str
+    :param user_agent_version: The version of the library
+
+    :type user_agent_extra: str
+    :param user_agent_extra: Any additional information to append to the
+        end of the user agent
+
+    :type env: dict
+    :param env: The environment being used to pull environment variables to
+        generate the user agent. This will use ``os.environ`` if nothing is
+        provided.
+    """
+    if env is None:
+        env = os.environ
+    base = '%s/%s Python/%s %s/%s' % (user_agent_name,
+                                      user_agent_version,
+                                      platform.python_version(),
+                                      platform.system(),
+                                      platform.release())
+    if env.get('AWS_EXECUTION_ENV') is not None:
+        base += ' exec-env/%s' % env.get('AWS_EXECUTION_ENV')
+    if user_agent_extra:
+        base += ' %s' % user_agent_extra
+    return base
 
 
 def normalize_url_path(path):
@@ -168,6 +205,7 @@ class InstanceMetadataFetcher(object):
         self._url = url
         if env is None:
             env = os.environ.copy()
+        self._env = env
         self._disabled = env.get('AWS_EC2_METADATA_DISABLED', 'false').lower()
         self._disabled = self._disabled == 'true'
 
@@ -177,7 +215,7 @@ class InstanceMetadataFetcher(object):
             raise _RetriesExceededError()
 
         headers = {
-            'User-Agent': 'aws-sdk-botocore/%s ' % botocore_version
+            'User-Agent': get_user_agent(env=self._env)
         }
 
         for i in range(num_attempts):

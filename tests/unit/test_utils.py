@@ -14,6 +14,7 @@ from tests import unittest
 from dateutil.tz import tzutc, tzoffset
 import datetime
 import copy
+import platform
 import mock
 
 import botocore
@@ -46,6 +47,7 @@ from botocore.utils import switch_to_virtual_host_style
 from botocore.utils import instance_cache
 from botocore.utils import merge_dicts
 from botocore.utils import get_service_module_name
+from botocore.utils import get_user_agent
 from botocore.utils import percent_encode_sequence
 from botocore.utils import percent_encode
 from botocore.utils import switch_host_s3_accelerate
@@ -1038,6 +1040,40 @@ class TestGetServiceModuleName(unittest.TestCase):
         )
 
 
+class TestGetUserAgent(unittest.TestCase):
+    def test_default(self):
+        self.assertEqual(
+            get_user_agent(env={}),
+            'Botocore/%s Python/%s %s/%s' % (
+                botocore.__version__,
+                platform.python_version(),
+                platform.system(),
+                platform.release()
+            )
+        )
+
+    def test_with_name(self):
+        user_agent = get_user_agent(user_agent_name='MyLibrary', env={})
+        self.assertTrue(user_agent.startswith('MyLibrary'))
+
+    def test_with_version(self):
+        user_agent = get_user_agent(user_agent_version='0.0.0', env={})
+        self.assertTrue(user_agent.startswith('Botocore/0.0.0'))
+
+    def test_with_user_agent_extra(self):
+        user_agent = get_user_agent(user_agent_extra='extra', env={})
+        self.assertTrue(user_agent.endswith(' extra'))
+
+    def test_with_execution_env(self):
+        user_agent = get_user_agent(env={'AWS_EXECUTION_ENV': 'MyEnv'})
+        self.assertTrue(user_agent.endswith(' exec-env/MyEnv'))
+
+    def test_with_user_agent_extra_and_execution_env(self):
+        user_agent = get_user_agent(
+            user_agent_extra='extra', env={'AWS_EXECUTION_ENV': 'MyEnv'})
+        self.assertTrue(user_agent.endswith(' exec-env/MyEnv extra'))
+
+
 class TestPercentEncodeSequence(unittest.TestCase):
     def test_percent_encode_empty(self):
         self.assertEqual(percent_encode_sequence({}), '')
@@ -1751,4 +1787,10 @@ class TestInstanceMetadataFetcher(unittest.TestCase):
             'role_name': 'role-name'
         }
         self.assertEqual(result, expected_result)
+
+    def test_includes_user_agent_header(self):
+        InstanceMetadataFetcher().retrieve_iam_role_credentials()
+        headers = self._requests.get.call_args[1]['headers']
+        self.assertIn('User-Agent', headers)
+        self.assertTrue(headers['User-Agent'].startswith('Botocore'))
 
