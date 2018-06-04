@@ -20,13 +20,11 @@ import functools
 import weakref
 import random
 import os
-import platform
 
 import dateutil.parser
 from dateutil.tz import tzlocal, tzutc
 
 import botocore
-from botocore import __version__ as botocore_version
 from botocore.exceptions import InvalidExpressionError, ConfigNotFound
 from botocore.exceptions import InvalidDNSNameError, ClientError
 from botocore.exceptions import MetadataRetrievalError
@@ -81,42 +79,6 @@ def get_service_module_name(service_model):
     name = name.replace('AWS', '')
     name = re.sub(r'\W+', '', name)
     return name
-
-
-def get_user_agent(user_agent_name='Botocore',
-                   user_agent_version=botocore_version,
-                   user_agent_extra=None,
-                   env=None):
-    """Returns a string suitable for use as a User-Agent header.
-
-    :type user_agent_name: str
-    :param user_agent_name: The name of the library to generate the user
-        agent for
-
-    :type user_agent_version: str
-    :param user_agent_version: The version of the library
-
-    :type user_agent_extra: str
-    :param user_agent_extra: Any additional information to append to the
-        end of the user agent
-
-    :type env: dict
-    :param env: The environment being used to pull environment variables to
-        generate the user agent. This will use ``os.environ`` if nothing is
-        provided.
-    """
-    if env is None:
-        env = os.environ
-    base = '%s/%s Python/%s %s/%s' % (user_agent_name,
-                                      user_agent_version,
-                                      platform.python_version(),
-                                      platform.system(),
-                                      platform.release())
-    if env.get('AWS_EXECUTION_ENV') is not None:
-        base += ' exec-env/%s' % env.get('AWS_EXECUTION_ENV')
-    if user_agent_extra:
-        base += ' %s' % user_agent_extra
-    return base
 
 
 def normalize_url_path(path):
@@ -199,24 +161,24 @@ def set_value_from_jmespath(source, expression, value, is_first=True):
 class InstanceMetadataFetcher(object):
     def __init__(self, timeout=DEFAULT_METADATA_SERVICE_TIMEOUT,
                  num_attempts=1, url=METADATA_SECURITY_CREDENTIALS_URL,
-                 env=None):
+                 env=None, user_agent=None):
         self._timeout = timeout
         self._num_attempts = num_attempts
         self._url = url
         if env is None:
             env = os.environ.copy()
-        self._env = env
         self._disabled = env.get('AWS_EC2_METADATA_DISABLED', 'false').lower()
         self._disabled = self._disabled == 'true'
+        self._user_agent = user_agent
 
     def _get_request(self, url, timeout, num_attempts=1):
         if self._disabled:
             logger.debug("Access to EC2 metadata has been disabled.")
             raise _RetriesExceededError()
 
-        headers = {
-            'User-Agent': get_user_agent(env=self._env)
-        }
+        headers = {}
+        if self._user_agent is not None:
+            headers['User-Agent'] = self._user_agent
 
         for i in range(num_attempts):
             try:

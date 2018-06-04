@@ -19,6 +19,7 @@ Session object.
 import copy
 import logging
 import os
+import platform
 
 from botocore import __version__
 import botocore.configloader
@@ -33,7 +34,6 @@ from botocore.loaders import create_loader
 from botocore.parsers import ResponseParserFactory
 from botocore.regions import EndpointResolver
 from botocore.model import ServiceModel
-from botocore.utils import get_user_agent
 from botocore import paginate
 from botocore import waiter
 from botocore import retryhandler, translate
@@ -497,11 +497,17 @@ class Session(object):
         appended to the end of the user agent string.
 
         """
-        return get_user_agent(
-            user_agent_name=self.user_agent_name,
-            user_agent_version=self.user_agent_version,
-            user_agent_extra=self.user_agent_extra
-        )
+        base = '%s/%s Python/%s %s/%s' % (self.user_agent_name,
+                                          self.user_agent_version,
+                                          platform.python_version(),
+                                          platform.system(),
+                                          platform.release())
+        if os.environ.get('AWS_EXECUTION_ENV') is not None:
+            base += ' exec-env/%s' % os.environ.get('AWS_EXECUTION_ENV')
+        if self.user_agent_extra:
+            base += ' %s' % self.user_agent_extra
+
+        return base
 
     def get_data(self, data_path):
         """
