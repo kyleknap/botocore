@@ -68,6 +68,8 @@ class ClientCreator(object):
                       endpoint_url=None, verify=None,
                       credentials=None, scoped_config=None,
                       client_config=None):
+        import awscrt
+        logger.debug('Imported crt %s' % awscrt)
         responses = self._event_emitter.emit(
             'choose-service-name', service_name=service_name)
         service_name = first_non_none_response(responses, default=service_name)
