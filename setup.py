@@ -28,6 +28,7 @@ requires = [
     'docutils>=0.10,<0.16',
     'python-dateutil>=2.1,<3.0.0',
     'urllib3>=1.20,<1.26',
+    'awscrt==0.5.18',
 ]
 
 
