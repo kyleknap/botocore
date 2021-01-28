@@ -79,10 +79,6 @@ class TestClientHTTPBehavior(unittest.TestCase):
         with self.assertRaises(ReadTimeoutError):
             self._read_timeout_server()
 
-    def test_old_read_timeout_exception(self):
-        with self.assertRaises(requests_exceptions.ReadTimeout):
-            self._read_timeout_server()
-
     @unittest.skip('The current implementation will fail to timeout on linux')
     def test_connect_timeout_exception(self):
         config = Config(
