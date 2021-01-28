@@ -22,6 +22,7 @@ class TestRoute53Pagination(unittest.TestCase):
         self.client = self.session.create_client('route53', 'us-west-2')
 
     def test_paginate_with_max_items(self):
+        assert False
         # Route53 has a string type for MaxItems.  We need to ensure that this
         # still works without any issues.
         paginator = self.client.get_paginator('list_hosted_zones')
